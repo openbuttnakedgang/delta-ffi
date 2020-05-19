@@ -1,0 +1,27 @@
+
+language = "C"
+no_includes = true
+sys_includes = ["stdint.h"]
+#namespace = "delta_ffi"
+
+pragma_once = true
+include_version = true
+cpp_compat = true
+
+[enum]
+rename_variants = "UpperCase"
+
+[fn]
+#prefix = "DELAT_FFI"
+args = "vertical"
+sort_by = "None"
+
+[parse]
+parse_deps = true
+include = ["delta"]
+
+[export]
+#prefix = "FFIDELTA_"
+
+[layout]
+packed = "PACKED"
