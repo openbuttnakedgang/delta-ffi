@@ -41,6 +41,34 @@ pub struct BlockParser {
     pos: usize,
 }
 
+#[repr(C)]
+#[no_mangle]
+pub struct FnBlockParser<'a> {
+    pub thys: &'a mut BlockParser,
+
+    /// Пытается открыть (распарсить) блок в переданной области памяти.
+    /// Если Ok то блок открыт, иначе см. возвращаемый статус
+    pub try_open_block: fn (
+        thys: &mut BlockParser,
+        block_mem: *mut u8,
+        block_mem_sz: usize,
+    ) -> BlockParserStatus,
+
+    /// Объект загловока отрытого блока, иначе null
+    pub get_header: fn (thys: &BlockParser) -> FnBlockHeader,
+
+    /// Итерируемся по точкам открытого блока пока Ok
+    pub iter_point: fn (
+        thys: &mut BlockParser,
+        out_point: *mut *const PointDesc,
+    ) -> BlockParserStatus,
+
+    /// Удаляет объект парсера
+    pub disposee: fn (
+        thys: *mut BlockParser
+    ) -> BlockParserStatus,
+}
+
 impl Default for BlockParser {
     fn default() -> Self {
         BlockParser {
@@ -58,8 +86,7 @@ impl Drop for BlockParser {
     }
 }
 
-#[repr(C)]
-#[repr(packed)]
+#[repr(C, packed)]
 #[no_mangle]
 pub struct BlockHeader {
     pub sign: u8,
@@ -71,16 +98,32 @@ pub struct BlockHeader {
     pub crc: u32,
 }
 
+#[repr(C)]
+#[no_mangle]
+pub struct FnBlockHeader<'a> {
+    pub thys: &'a mut BlockHeader,
+    /// Получить IDINV
+    pub id_inv: fn (&BlockHeader) -> u32,
+    /// Получить IDFMT
+    pub id_fmt: fn (&BlockHeader) ->u16,
+    /// Получить номер обследования
+    pub rec_num: fn (&BlockHeader) ->u16,
+    /// Получить номер блока
+    pub blk_num: fn (&BlockHeader) ->u16,
+    /// Получить время (ре)старта
+    pub time: fn (&BlockHeader) ->u64,
+}
+
 /// Создает объект парсера
 #[no_mangle]
-pub extern fn delta_blockparser_new() -> &'static mut BlockParser {
-    let unp = Default::default();
-    Box::leak(Box::new(unp))
+pub extern fn delta_blockparser_new() -> FnBlockParser<'static> {
+    //let unp = Default::default();
+    //Box::leak(Box::new(unp))
+    todo!()
 }
 
 /// Пытается открыть (распарсить) блок в переданной области памяти.
 /// Если Ok то блок открыт, иначе см. возвращаемый статус
-#[no_mangle]
 pub extern fn delta_blockparser_try_open_block(
     thiz: &mut BlockParser,
     block_mem: *mut u8,
@@ -100,8 +143,27 @@ pub extern fn delta_blockparser_try_open_block(
 
 /// Загловок отрытого блока, иначе null
 #[no_mangle]
-pub extern fn delta_blockparser_header() -> Option<&'static BlockHeader> {
-    todo!()
+pub extern fn delta_blockparser_header() -> FnBlockHeader<'static> {
+    static mut TEST_BH: BlockHeader = BlockHeader {
+        sign: 0x74,
+        id_inv: 0xA5A5A5A5,
+        id_fmt: 0xE5E5,
+        rec_num: 0x4242,
+        blk_num: 0x2424,
+        time: 0xB6B6B6B6_B7B7B7B7,
+        crc: 0xDADA,
+    };
+    
+    unsafe {
+        FnBlockHeader {
+            thys: &mut TEST_BH,
+            id_inv: |_| TEST_BH.id_inv,
+            id_fmt: |_| TEST_BH.id_fmt, 
+            rec_num: |_| TEST_BH.rec_num,
+            blk_num: |_| TEST_BH.blk_num,
+            time: |_| TEST_BH.time,
+        }
+    }
 }
 
 #[repr(C)]
@@ -114,7 +176,6 @@ pub struct PointDesc {
 }
 
 /// Итерируемся по точкам открытого блока пока Ok
-#[no_mangle]
 pub extern fn delta_blockparser_iter_point(
     thiz: &mut BlockParser,
     out_point: *mut PointDesc,
@@ -123,7 +184,6 @@ pub extern fn delta_blockparser_iter_point(
 }
 
 /// Удаляет объект парсера
-#[no_mangle]
 pub extern fn delta_blockparser_dispose(
     this_ptr: *mut *mut BlockParser
 ) -> BlockParserStatus {
@@ -138,7 +198,7 @@ pub extern fn delta_blockparser_dispose(
 
     unsafe {
         let p = Box::from_raw(this);
-        delta_debug_blockparser_print_state(Some(&p));
+        //delta_debug_blockparser_print_state(Some(&p));
 
         // Set null
         this_ptr.write(std::ptr::null_mut());
@@ -148,7 +208,7 @@ pub extern fn delta_blockparser_dispose(
 }
 
 #[no_mangle]
-pub extern fn delta_debug_blockparser_print_state(thiz: Option<&BlockParser>) {
+pub extern fn delta_debug_blockparser_print_state(thiz: Option<&BlockParser>, t: &FnBlockHeader) {
     if let Some(unpacker) = thiz {
         println!("{:#?}", unpacker);
     } else {

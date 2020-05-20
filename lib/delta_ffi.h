@@ -18,6 +18,8 @@ enum BlockParserStatus
 typedef uint8_t BlockParserStatus;
 #endif // __cplusplus
 
+typedef struct BlockHeader BlockHeader;
+
 /**
  * # Низкоуровневый интерфейс для парсинга блока
  *
@@ -37,23 +39,29 @@ typedef uint8_t BlockParserStatus;
  */
 typedef struct BlockParser BlockParser;
 
-typedef struct PACKED {
-  uint8_t sign;
-  uint32_t id_inv;
-  uint16_t id_fmt;
-  uint16_t rec_num;
-  uint16_t blk_num;
-  uint64_t time;
-  uint32_t crc;
-} 
-#ifdef _MSC_VER
-#pragma pack(push,1)
-BlockHeader
-#pragma pack(pop)
-#else 
-BlockHeader
-#endif
-;
+typedef struct {
+  BlockHeader *thys;
+  /**
+   * Получить IDINV
+   */
+  uint32_t (*id_inv)(const BlockHeader*);
+  /**
+   * Получить IDFMT
+   */
+  uint16_t (*id_fmt)(const BlockHeader*);
+  /**
+   * Получить номер обследования
+   */
+  uint16_t (*rec_num)(const BlockHeader*);
+  /**
+   * Получить номер блока
+   */
+  uint16_t (*blk_num)(const BlockHeader*);
+  /**
+   * Получить время (ре)старта
+   */
+  uint64_t (*time)(const BlockHeader*);
+} FnBlockHeader;
 
 typedef struct {
   uint8_t id_group;
@@ -61,6 +69,27 @@ typedef struct {
   uint8_t *buf;
   uintptr_t buf_sz;
 } PointDesc;
+
+typedef struct {
+  BlockParser *thys;
+  /**
+   * Пытается открыть (распарсить) блок в переданной области памяти.
+   * Если Ok то блок открыт, иначе см. возвращаемый статус
+   */
+  BlockParserStatus (*try_open_block)(BlockParser *thys, uint8_t *block_mem, uintptr_t block_mem_sz);
+  /**
+   * Объект загловока отрытого блока, иначе null
+   */
+  FnBlockHeader (*get_header)(const BlockParser *thys);
+  /**
+   * Итерируемся по точкам открытого блока пока Ok
+   */
+  BlockParserStatus (*iter_point)(BlockParser *thys, const PointDesc **out_point);
+  /**
+   * Удаляет объект парсера
+   */
+  BlockParserStatus (*disposee)(BlockParser *thys);
+} FnBlockParser;
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,41 +103,15 @@ const char *delta_lib_version(void);
 /**
  * Создает объект парсера
  */
-BlockParser *delta_blockparser_new(void);
-
-/**
- * Пытается открыть (распарсить) блок в переданной области памяти.
- * Если Ok то блок открыт, иначе см. возвращаемый статус
- */
-BlockParserStatus delta_blockparser_try_open_block(BlockParser *thiz,
-                                                   uint8_t *block_mem,
-                                                   uintptr_t block_mem_sz);
+FnBlockParser delta_blockparser_new(void);
 
 /**
  * Загловок отрытого блока, иначе null
  */
-const 
-#ifdef _MSC_VER
-#pragma pack(push,1)
-BlockHeader
-#pragma pack(pop)
-#else 
-BlockHeader
-#endif
- *delta_blockparser_header(void);
+FnBlockHeader delta_blockparser_header(void);
 
-/**
- * Итерируемся по точкам открытого блока пока Ok
- */
-BlockParserStatus delta_blockparser_iter_point(BlockParser *thiz,
-                                               PointDesc *out_point);
-
-/**
- * Удаляет объект парсера
- */
-BlockParserStatus delta_blockparser_dispose(BlockParser **this_ptr);
-
-void delta_debug_blockparser_print_state(const BlockParser *thiz);
+void delta_debug_blockparser_print_state(const BlockParser *thiz,
+                                         const FnBlockHeader *t);
 
 #ifdef __cplusplus
 } // extern "C"
