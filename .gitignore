@@ -3,3 +3,5 @@ Cargo.lock
 */**/build
 *.exe
 *.out
+*/**/CMakeSettings.json
+*/**/.vs/
