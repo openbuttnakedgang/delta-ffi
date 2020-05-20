@@ -2,3 +2,4 @@
 Cargo.lock
 */**/build
 *.exe
+*.out
